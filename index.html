@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<!-- build: 2026-07-18  3Dビリヤード（かんたん／ミニゲーム／ナインボール） -->
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>ビリヤード</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --felt:#1b6b47;
+    --rail:#3a2417;
+    --rail-hi:#5a3a26;
+    --bg-top:#eee5cd;
+    --bg-bot:#c3b48a;
+    --brass:#c9a24b;
+    --ink:#f4efe3;
+    --ink-dark:#241a10;
+    --accent:#c98a1f;
+    --panel:rgba(18,16,14,.82);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    margin:0; padding:0; width:100%; height:100%;
+    overflow:hidden;
+    background:radial-gradient(120% 100% at 50% 0%, var(--bg-top), var(--bg-bot));
+    font-family:"BIZ UDPGothic",sans-serif;
+    color:var(--ink);
+    touch-action:manipulation;
+    overscroll-behavior:none;
+    user-select:none; -webkit-user-select:none;
+  }
+  #app{ position:fixed; inset:0; }
+  canvas{ display:block; touch-action:none; }
+  #app.viewmode::after{
+    content:''; position:fixed; inset:0; pointer-events:none;
+    border:5px solid rgba(232,176,75,.55);
+    box-shadow:inset 0 0 46px rgba(232,176,75,.32);
+    z-index:5;
+  }
+
+  /* --- HUD --- */
+  #hud{ position:fixed; inset:0; pointer-events:none; }
+  .hud-top{
+    position:absolute; top:0; left:0; right:0;
+    display:flex; align-items:center; gap:10px;
+    padding:14px 16px;
+  }
+  .pill{
+    background:var(--panel);
+    border:1px solid rgba(201,162,75,.35);
+    border-radius:999px;
+    padding:8px 16px;
+    font-weight:700; font-size:15px;
+    letter-spacing:.02em;
+    backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px);
+    white-space:nowrap;
+  }
+  .pill .lbl{ color:#b9c4bd; font-weight:400; font-size:12px; margin-right:6px; }
+  .pill .big{ font-size:18px; color:var(--accent); }
+  #timerPill.warn .big{ color:#ff6b5c; }
+  .grow{ flex:1; }
+
+  .icon-btn{
+    pointer-events:auto;
+    min-width:44px; min-height:44px;
+    display:flex; align-items:center; justify-content:center;
+    background:var(--panel);
+    border:1px solid rgba(201,162,75,.35);
+    border-radius:12px;
+    color:var(--ink);
+    font-size:22px; font-weight:700;
+    cursor:pointer;
+  }
+  .icon-btn:active{ background:rgba(201,162,75,.22); }
+  .icon-btn.active{
+    background:linear-gradient(180deg,#e8b04b,#c78a1f);
+    color:#1a140a; border-color:transparent;
+  }
+
+  #zoomWrap{
+    position:absolute; right:14px; bottom:calc(14px + env(safe-area-inset-bottom));
+    display:flex; flex-direction:column; gap:10px;
+  }
+  #rotWrap{
+    position:absolute; left:14px; top:74px;
+    display:flex; gap:10px;
+    pointer-events:auto;
+  }
+  #powerWrap{
+    position:absolute; left:16px; bottom:calc(18px + env(safe-area-inset-bottom));
+    width:180px; pointer-events:none; opacity:0; transition:opacity .12s;
+  }
+  #powerWrap.show{ opacity:1; }
+  .power-track{
+    height:14px; border-radius:999px;
+    background:rgba(0,0,0,.45);
+    border:1px solid rgba(201,162,75,.4);
+    overflow:hidden;
+  }
+  #powerFill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg,#5ad19a,#e8b04b,#ff5c5c);
+    transition:width .03s linear;
+  }
+  .power-cap{ font-size:12px; color:#b9c4bd; margin-top:4px; }
+
+  /* --- overlays --- */
+  .overlay{
+    position:fixed; inset:0;
+    display:flex; align-items:center; justify-content:center;
+    padding:24px;
+    pointer-events:auto;
+    background:radial-gradient(120% 100% at 50% 10%, rgba(238,231,209,.85), rgba(184,169,130,.94));
+    backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+    z-index:20;
+  }
+  .overlay.hide{ display:none; }
+  .card{
+    width:min(560px,92vw);
+    text-align:center;
+  }
+  .title-kicker{
+    font-size:13px; letter-spacing:.5em; text-indent:.5em;
+    color:#8a6a28; font-weight:400; margin-bottom:10px;
+  }
+  .title-main{
+    font-size:clamp(38px,11vw,68px); line-height:.98; font-weight:700;
+    margin:0 0 4px; letter-spacing:.02em;
+    color:var(--ink-dark);
+  }
+  .title-sub{ color:#5b4f3c; font-size:15px; margin:6px 0 30px; }
+
+  .mode-list{ display:flex; flex-direction:column; gap:14px; }
+  .mode-btn{
+    pointer-events:auto;
+    display:flex; align-items:center; gap:16px;
+    text-align:left;
+    padding:16px 18px;
+    min-height:44px;
+    background:linear-gradient(180deg, rgba(40,32,24,.9), rgba(24,20,15,.9));
+    border:1px solid rgba(201,162,75,.3);
+    border-radius:16px;
+    color:var(--ink);
+    cursor:pointer;
+    transition:transform .08s, border-color .12s, background .12s;
+  }
+  .mode-btn:active{ transform:scale(.985); }
+  .mode-btn:hover{ border-color:rgba(201,162,75,.7); }
+  .mode-num{
+    flex:none; width:44px; height:44px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:20px;
+    background:radial-gradient(circle at 35% 30%, #fff, #d7d2c4 60%, #b6b0a0);
+    color:#1a1a1a;
+    box-shadow:inset -2px -3px 6px rgba(0,0,0,.35);
+  }
+  .mode-txt b{ display:block; font-size:19px; font-weight:700; }
+  .mode-txt span{ display:block; font-size:13px; color:#a9b4ac; margin-top:2px; }
+
+  .msg-h{ font-size:clamp(30px,9vw,52px); font-weight:700; margin:0 0 10px; }
+  .msg-h.good{ color:var(--accent); }
+  .msg-h.bad{ color:#ff6b5c; }
+  .msg-p{ color:#4a4030; font-size:16px; margin:0 0 26px; line-height:1.6; }
+  .btn-row{ display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+  .btn{
+    pointer-events:auto;
+    min-height:44px; padding:12px 24px;
+    border-radius:12px; font-weight:700; font-size:16px;
+    border:1px solid rgba(201,162,75,.4);
+    background:rgba(24,20,15,.9); color:var(--ink); cursor:pointer;
+  }
+  .btn.primary{ background:linear-gradient(180deg,#e8b04b,#c78a1f); color:#1a140a; border-color:transparent; }
+  .btn:active{ transform:scale(.98); }
+
+  /* toast (foul / hint) */
+  #toast{
+    position:fixed; left:50%; top:76px; transform:translateX(-50%) translateY(-8px);
+    background:var(--panel); border:1px solid rgba(255,107,92,.5);
+    color:var(--ink); padding:10px 18px; border-radius:12px;
+    font-weight:700; font-size:15px; opacity:0; transition:opacity .2s, transform .2s;
+    pointer-events:none; z-index:15; text-align:center; max-width:88vw;
+  }
+  #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  #toast.hint{ border-color:rgba(201,162,75,.5); }
+
+  @media print{ #hud,.overlay{ display:none !important; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div id="hud">
+  <div class="hud-top">
+    <button class="icon-btn" id="menuBtn" title="メニュー" aria-label="メニュー">☰</button>
+    <button class="icon-btn" id="viewModeBtn" title="視点モード" aria-label="視点モード切替">👁</button>
+    <div class="pill" id="statusPill"><span class="lbl">ねらう球</span><span class="big" id="statusVal">-</span></div>
+    <div class="grow"></div>
+    <div class="pill" id="timerPill" style="display:none"><span class="lbl">のこり</span><span class="big" id="timerVal">--</span></div>
+  </div>
+
+  <div id="powerWrap">
+    <div class="power-track"><div id="powerFill"></div></div>
+    <div class="power-cap">パワー</div>
+  </div>
+
+  <div id="zoomWrap">
+    <button class="icon-btn" id="zoomIn" aria-label="ズームイン">＋</button>
+    <button class="icon-btn" id="zoomOut" aria-label="ズームアウト">－</button>
+  </div>
+
+  <div id="rotWrap">
+    <button class="icon-btn" id="rotLeft" aria-label="視点を左に回す">⟲</button>
+    <button class="icon-btn" id="rotUp" aria-label="視点を上下に切替">⇕</button>
+    <button class="icon-btn" id="rotRight" aria-label="視点を右に回す">⟳</button>
+    <button class="icon-btn" id="rotReset" aria-label="視点をリセット">⌂</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- モード選択 -->
+<div class="overlay" id="menuOverlay">
+  <div class="card">
+    <div class="title-kicker">３Ｄ ＢＩＬＬＩＡＲＤＳ</div>
+    <h1 class="title-main">ビリヤード</h1>
+    <p class="title-sub">ドラッグで手球を引いて、はなすと打てます</p>
+    <div class="mode-list">
+      <button class="mode-btn" data-mode="easy">
+        <span class="mode-num">◇</span>
+        <span class="mode-txt"><b>かんたん</b><span>白球と9番だけ。まずは操作に慣れよう</span></span>
+      </button>
+      <button class="mode-btn" data-mode="minigame">
+        <span class="mode-num">⏱</span>
+        <span class="mode-txt"><b>ミニゲーム</b><span>制限時間内に的球を全部ポケットへ</span></span>
+      </button>
+      <button class="mode-btn" data-mode="9ball">
+        <span class="mode-num">9</span>
+        <span class="mode-txt"><b>ナインボール</b><span>小さい番号から順に。9番を入れて勝ち</span></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 結果 -->
+<div class="overlay hide" id="resultOverlay">
+  <div class="card">
+    <h2 class="msg-h" id="resultH">クリア！</h2>
+    <p class="msg-p" id="resultP"></p>
+    <div class="btn-row" id="resultBtns"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* =====================================================================
+   3Dビリヤード
+   - 物理は自前計算（XZ平面の2D円運動）。cannon-esは使わない。
+   - 描画はデータモデル（ball.pos / ball.vel）で駆動し、
+     Three.jsのMeshは毎フレーム同期するだけ（下の syncMeshes を参照）。
+   ===================================================================== */
+
+// ---- テーブル寸法・物理定数 ----
+const R        = 0.45;                 // 球の半径
+const HALF_L   = 9.0;                  // プレイ面 半長（X方向）
+const HALF_W   = 4.5;                  // プレイ面 半幅（Z方向）
+const WALL_X   = HALF_L - R;           // 球中心が届く壁の限界
+const WALL_Z   = HALF_W - R;
+const BALL_Y   = R;                    // 球中心の高さ
+const FIXED    = 1/240;                // 物理固定ステップ（サブステップ）
+const DT_CLAMP = 1/30;                 // dtクランプ（共通仕様）
+const FRICTION = 6.2;                  // 転がり減速（units/s^2）
+const REST_BALL= 0.95;                 // 球同士の反発
+const REST_CUSH= 0.72;                 // クッション反発
+const MAX_SPEED= 22;                   // 最大初速
+const MAX_DRAG = 3.6;                  // この距離のドラッグで最大パワー
+const MIN_DRAG = 0.18;                 // これ未満は打たない（タップ扱い）
+const AIM_CATCH_R = 3.2;               // 手球からこの距離以内でしか構えられない
+const STOP_EPS = 0.06;                 // これ以下の速度は停止とみなす
+const CAP_R    = R * 1.95;             // ポケット捕捉半径
+
+// ポケット位置（4隅＋長辺中央2つ）
+const POCKETS = [
+  {x:-HALF_L, z:-HALF_W}, {x:HALF_L, z:-HALF_W},
+  {x:-HALF_L, z: HALF_W}, {x:HALF_L, z: HALF_W},
+  {x:0,       z:-HALF_W}, {x:0,      z: HALF_W},
+];
+
+// 標準的なプールボールの色
+const BALL_COLORS = {
+  0:'#f3f0e6', 1:'#f7c948', 2:'#2a5db0', 3:'#c0392b', 4:'#6c3fa0',
+  5:'#e07b1a', 6:'#1f8a4c', 7:'#7a2230', 8:'#141414', 9:'#f7c948',
+};
+const TARGET_COLORS = ['#e6484c','#2a9df4','#f7c948','#2ec26b','#b565d8','#ff8f3f','#ff5ca8'];
+
+// =====================================================================
+// レンダラ・シーン
+// =====================================================================
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xcabf9c);
+scene.fog = new THREE.Fog(0xcabf9c, 30, 60);
+
+const camera = new THREE.PerspectiveCamera(46, window.innerWidth/window.innerHeight, 0.1, 200);
+const camTarget = new THREE.Vector3(0, 0, 0);
+const DEFAULT_DIST = 22, DEFAULT_AZIM = -Math.PI/2, DEFAULT_ELEV = 0.92;
+let camDist = DEFAULT_DIST;             // ズームで変化
+const CAM_MIN = 13, CAM_MAX = 30;
+const camAngle = { azim: DEFAULT_AZIM, elev: DEFAULT_ELEV }; // 手前・斜め上から
+function updateCamera(){
+  const cx = Math.cos(camAngle.azim) * Math.cos(camAngle.elev);
+  const cz = Math.sin(camAngle.azim) * Math.cos(camAngle.elev);
+  const cy = Math.sin(camAngle.elev);
+  camera.position.set(camTarget.x + cx*camDist, camTarget.y + cy*camDist, camTarget.z + cz*camDist);
+  camera.lookAt(camTarget);
+}
+updateCamera();
+
+// ---- ライト ----
+scene.add(new THREE.HemisphereLight(0xffffff, 0x9c8f6c, 0.95));
+const key = new THREE.DirectionalLight(0xfff2d8, 1.15);
+key.position.set(-6, 18, 4);
+key.castShadow = true;
+key.shadow.mapSize.set(1024,1024);
+key.shadow.camera.left=-14; key.shadow.camera.right=14;
+key.shadow.camera.top=10; key.shadow.camera.bottom=-10;
+key.shadow.camera.near=1; key.shadow.camera.far=50;
+scene.add(key);
+const fill = new THREE.DirectionalLight(0xdfe8ff, 0.35);
+fill.position.set(8, 10, -6);
+scene.add(fill);
+
+// =====================================================================
+// テーブル
+// =====================================================================
+function buildTable(){
+  const g = new THREE.Group();
+
+  // フェルト
+  const feltGeo = new THREE.BoxGeometry(HALF_L*2, 0.4, HALF_W*2);
+  const feltMat = new THREE.MeshStandardMaterial({ color:0x1b6b47, roughness:0.95, metalness:0 });
+  const felt = new THREE.Mesh(feltGeo, feltMat);
+  felt.position.y = -0.2; felt.receiveShadow = true;
+  g.add(felt);
+
+  // レール（木枠）
+  const railMat = new THREE.MeshStandardMaterial({ color:0x3a2417, roughness:0.55, metalness:0.1 });
+  const rh = 0.7, rt = 0.9;
+  const railLong = new THREE.BoxGeometry(HALF_L*2 + rt*2, rh, rt);
+  const r1 = new THREE.Mesh(railLong, railMat); r1.position.set(0, rh/2-0.1,  HALF_W+rt/2); r1.castShadow=true; g.add(r1);
+  const r2 = new THREE.Mesh(railLong, railMat); r2.position.set(0, rh/2-0.1, -HALF_W-rt/2); r2.castShadow=true; g.add(r2);
+  const railShort = new THREE.BoxGeometry(rt, rh, HALF_W*2);
+  const r3 = new THREE.Mesh(railShort, railMat); r3.position.set( HALF_L+rt/2, rh/2-0.1, 0); r3.castShadow=true; g.add(r3);
+  const r4 = new THREE.Mesh(railShort, railMat); r4.position.set(-HALF_L-rt/2, rh/2-0.1, 0); r4.castShadow=true; g.add(r4);
+
+  // ポケット（黒い穴＋真鍮リング）
+  const holeMat = new THREE.MeshStandardMaterial({ color:0x2a2118, roughness:1 });
+  const ringMat = new THREE.MeshStandardMaterial({ color:0xc9a24b, roughness:0.45, metalness:0.55 });
+  for(const p of POCKETS){
+    const hole = new THREE.Mesh(new THREE.CylinderGeometry(CAP_R, CAP_R, 0.35, 24), holeMat);
+    hole.position.set(p.x, 0.01, p.z); g.add(hole);
+    // フラットな縁飾り（盛り上げず、フェルトとほぼ面一のデカール状）
+    const ring = new THREE.Mesh(new THREE.RingGeometry(CAP_R*0.9, CAP_R*1.05, 32), ringMat);
+    ring.rotation.x = -Math.PI/2; ring.position.set(p.x, 0.021, p.z); g.add(ring);
+  }
+  scene.add(g);
+}
+buildTable();
+
+// =====================================================================
+// 球テクスチャ（上ポール付近に番号キャップを描く → 斜め上視点で番号が読める）
+// =====================================================================
+const texCache = {};
+function ballTexture(baseHex, number, striped){
+  const key = baseHex+'|'+number+'|'+striped;
+  if(texCache[key]) return texCache[key];
+  const c = document.createElement('canvas'); c.width=c.height=256;
+  const x = c.getContext('2d');
+  if(striped){
+    x.fillStyle = '#f3f0e6'; x.fillRect(0,0,256,256);
+    x.fillStyle = baseHex; x.fillRect(0,98,256,60);   // 帯
+  } else {
+    x.fillStyle = baseHex; x.fillRect(0,0,256,256);
+  }
+  if(number !== null){
+    // 本物の球のように、対になる2箇所に同じ番号デカールを配置
+    const spots = [ [128, 62], [128, 194] ];
+    for(const [sx, sy] of spots){
+      x.fillStyle = '#f6f3ea';
+      x.beginPath(); x.arc(sx, sy, 42, 0, Math.PI*2); x.fill();
+      x.fillStyle = '#161616';
+      x.font = 'bold 52px "BIZ UDPGothic",sans-serif';
+      x.textAlign='center'; x.textBaseline='middle';
+      x.fillText(String(number), sx, sy+2);
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  texCache[key] = t;
+  return t;
+}
+
+// =====================================================================
+// 球（データモデル + Mesh）
+// =====================================================================
+const balls = [];        // 生きている球のみ扱う配列（state で管理）
+let cueBall = null;
+const sphereGeo = new THREE.SphereGeometry(R, 28, 20);
+
+function makeBall({ id, num, colorHex, isCue=false, striped=false, x, z }){
+  const tex = (num===0 || isCue)
+      ? ballTexture(colorHex, null, false)                 // 手球は無地
+      : ballTexture(colorHex, num, striped);
+  const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.28, metalness:0.05 });
+  const mesh = new THREE.Mesh(sphereGeo, mat);
+  mesh.castShadow = true;
+  mesh.position.set(x, BALL_Y, z);
+  scene.add(mesh);
+  const b = { id, num, isCue, color:colorHex, mesh,
+              pos:{x,z}, vel:{x:0,z:0}, state:'onTable', sinkT:0, sinkP:null };
+  return b;
+}
+
+function clearBalls(){
+  for(const b of balls){ scene.remove(b.mesh); b.mesh.geometry===sphereGeo; b.mesh.material.dispose(); }
+  balls.length = 0; cueBall = null;
+}
+
+// =====================================================================
+// ゲーム状態
+// =====================================================================
+const G = {
+  mode:'select',        // 'select'|'easy'|'minigame'|'9ball'
+  phase:'aim',          // 'aim'|'shooting'|'ballInHand'|'cleared'|'gameover'
+  frames:0, elapsed:0,
+  timer:0, timerOn:false,
+  shots:0,
+  shot:null,            // ショット中の記録
+  targetsTotal:0,
+};
+
+// テストフック（共通仕様）
+window.__game = {
+  get state(){ return { mode:G.mode, phase:G.phase }; },
+  balls, get cueBall(){ return cueBall; },
+  get frames(){ return G.frames; },
+  get elapsed(){ return G.elapsed; },
+  get timer(){ return G.timer; },
+  api:{
+    selectMode:(m)=>startMode(m),
+    shoot:(angle,power)=>apiShoot(angle,power),
+    reset:()=>startMode(G.mode),
+  }
+};
+window.__G = window.__game;
+
+// =====================================================================
+// モード開始
+// =====================================================================
+function startMode(mode){
+  clearBalls();
+  G.mode = mode; G.phase='aim'; G.shots=0; G.shot=null;
+  G.timerOn=false; G.timer=0;
+  hideResult(); hideToast();
+
+  if(mode==='easy')      setupEasy();
+  else if(mode==='minigame') setupMinigame();
+  else if(mode==='9ball')    setup9ball();
+
+  document.getElementById('menuOverlay').classList.add('hide');
+  refreshHud();
+  if(mode==='easy' && !easyHintShown){ easyHintShown=true; showToast('ドラッグして指をはなすと打てます', 'hint', 2600); }
+}
+let easyHintShown = false;
+
+function spawnCue(x, z){
+  cueBall = makeBall({ id:'cue', num:0, colorHex:BALL_COLORS[0], isCue:true, x, z });
+  balls.push(cueBall);
+}
+
+function setupEasy(){
+  spawnCue(-4.6, 0);
+  balls.push(makeBall({ id:'b9', num:9, colorHex:BALL_COLORS[9], striped:true, x:3.2, z:0 }));
+}
+
+function setup9ball(){
+  spawnCue(-4.8, 0);
+  // ダイヤ配置（apexが手球側 / 9番は中央）
+  const s  = 2*R;              // 同列内の間隔
+  const rs = R*Math.SQRT2*1.225; // 列間（≈ r*√3）
+  const apex = 3.0;
+  const rows = [
+    [ [1] ],
+    [ [2],[3] ],
+    [ [4],[9],[5] ],
+    [ [6],[7] ],
+    [ [8] ],
+  ];
+  rows.forEach((row, ri)=>{
+    const n = row.length;
+    row.forEach((cell, ci)=>{
+      const num = cell[0];
+      const x = apex + ri*rs;
+      const z = (ci - (n-1)/2) * s;
+      balls.push(makeBall({ id:'b'+num, num, colorHex:BALL_COLORS[num], striped:(num===9), x, z }));
+    });
+  });
+}
+
+function setupMinigame(){
+  spawnCue(-5.2, 0);
+  const count = 6;
+  G.targetsTotal = count;
+  const placed = [{x:cueBall.pos.x, z:cueBall.pos.z}];
+  let seed = (Date.now() % 100000);
+  const rnd = ()=>{ seed = (seed*9301+49297)%233280; return seed/233280; };
+  let made = 0, guard = 0;
+  while(made < count && guard < 2000){
+    guard++;
+    const x = (rnd()*2-1) * (WALL_X-1.2);
+    const z = (rnd()*2-1) * (WALL_Z-1.0);
+    // ポケット近く・他球近くは避ける
+    let ok = Math.abs(x) > 1.2 || Math.abs(z) < WALL_Z-1.4;
+    for(const p of POCKETS){ if(Math.hypot(x-p.x, z-p.z) < CAP_R+0.8) ok=false; }
+    for(const q of placed){ if(Math.hypot(x-q.x, z-q.z) < 2.3*R+0.15) ok=false; }
+    if(!ok) continue;
+    placed.push({x,z});
+    balls.push(makeBall({ id:'t'+made, num:null, colorHex:TARGET_COLORS[made%TARGET_COLORS.length], x, z }));
+    made++;
+  }
+  G.timer = 120; G.timerOn = true;
+}
+
+// =====================================================================
+// 物理
+// =====================================================================
+function activeBalls(){ return balls.filter(b=>b.state==='onTable'); }
+
+const _rollAxis = new THREE.Vector3();
+function physicsStep(dt){
+  const act = activeBalls();
+  // 移動＋摩擦
+  for(const b of act){
+    let sp = Math.hypot(b.vel.x, b.vel.z);
+    if(sp > 0){
+      const dec = FRICTION*dt;
+      const ns = Math.max(0, sp - dec);
+      const k = ns/sp;
+      b.vel.x*=k; b.vel.z*=k;
+    }
+    b.pos.x += b.vel.x*dt;
+    b.pos.z += b.vel.z*dt;
+    // 転がり回転（見た目用。滑らかに転がる球として描画するだけで判定には使わない）
+    if(sp > 0.001){
+      _rollAxis.set(b.vel.z, 0, -b.vel.x).normalize();
+      const angle = sp*dt/R;
+      b.mesh.rotateOnWorldAxis(_rollAxis, angle);
+    }
+  }
+  // ポケット捕捉（壁反射より先に判定）
+  for(const b of act){
+    for(const p of POCKETS){
+      if(Math.hypot(b.pos.x-p.x, b.pos.z-p.z) < CAP_R){
+        sinkBall(b, p);
+        break;
+      }
+    }
+  }
+  // 壁反射
+  for(const b of activeBalls()){
+    if(b.pos.x >  WALL_X){ b.pos.x= WALL_X; b.vel.x=-Math.abs(b.vel.x)*REST_CUSH; playCushion(b); }
+    if(b.pos.x < -WALL_X){ b.pos.x=-WALL_X; b.vel.x= Math.abs(b.vel.x)*REST_CUSH; playCushion(b); }
+    if(b.pos.z >  WALL_Z){ b.pos.z= WALL_Z; b.vel.z=-Math.abs(b.vel.z)*REST_CUSH; playCushion(b); }
+    if(b.pos.z < -WALL_Z){ b.pos.z=-WALL_Z; b.vel.z= Math.abs(b.vel.z)*REST_CUSH; playCushion(b); }
+  }
+  // 球同士の弾性衝突
+  const a2 = activeBalls();
+  for(let i=0;i<a2.length;i++){
+    for(let j=i+1;j<a2.length;j++){
+      resolvePair(a2[i], a2[j]);
+    }
+  }
+}
+
+function resolvePair(a, b){
+  let dx = b.pos.x-a.pos.x, dz = b.pos.z-a.pos.z;
+  let dist = Math.hypot(dx, dz);
+  const min = 2*R;
+  if(dist === 0){ dx = 0.001; dz = 0; dist = 0.001; }
+  if(dist >= min) return;
+  const nx = dx/dist, nz = dz/dist;
+  // めり込み分離
+  const overlap = (min - dist);
+  a.pos.x -= nx*overlap/2; a.pos.z -= nz*overlap/2;
+  b.pos.x += nx*overlap/2; b.pos.z += nz*overlap/2;
+  // 法線方向の相対速度
+  const p = (a.vel.x-b.vel.x)*nx + (a.vel.z-b.vel.z)*nz;
+  if(p <= 0) return; // 離れていくなら無視
+  const jmag = (1+REST_BALL)/2 * p;
+  a.vel.x -= jmag*nx; a.vel.z -= jmag*nz;
+  b.vel.x += jmag*nx; b.vel.z += jmag*nz;
+  // 9ball用：手球が最初に触れた対象球を記録
+  if(G.shot && G.shot.firstHit===null){
+    if(a.isCue && !b.isCue) G.shot.firstHit = b;
+    else if(b.isCue && !a.isCue) G.shot.firstHit = a;
+  }
+  playClick(a, b, Math.abs(p));
+}
+
+function sinkBall(b, pocket){
+  b.state = 'sinking'; b.sinkT = 0; b.sinkP = pocket;
+  b.vel.x = 0; b.vel.z = 0;
+  if(G.shot){
+    if(b.isCue) G.shot.scratch = true;
+    else G.shot.pocketed.push(b);
+  }
+  playPlunk();
+}
+
+// 沈むアニメ（データモデル側で高さを進め、Meshは同期のみ）
+function stepSinking(dt){
+  for(const b of balls){
+    if(b.state!=='sinking') continue;
+    b.sinkT += dt;
+    if(b.sinkT >= 0.4){ b.state='gone'; b.mesh.visible=false; }
+  }
+}
+
+// =====================================================================
+// ショット解決
+// =====================================================================
+function allStopped(){
+  for(const b of activeBalls()){
+    if(Math.hypot(b.vel.x, b.vel.z) > STOP_EPS) return false;
+  }
+  // 沈み中の球が残っていれば待つ
+  for(const b of balls){ if(b.state==='sinking') return false; }
+  return true;
+}
+
+function beginShot(){
+  G.shot = { firstHit:null, scratch:false, pocketed:[],
+             lowest: lowestActiveNum() };
+  G.phase = 'shooting';
+  G.shots++;
+}
+
+function resolveShot(){
+  const s = G.shot; G.shot = null;
+  if(G.mode==='easy')       resolveEasy(s);
+  else if(G.mode==='minigame') resolveMini(s);
+  else if(G.mode==='9ball')    resolve9(s);
+}
+
+function resolveEasy(s){
+  const nine = balls.find(b=>b.num===9);
+  if(nine && nine.state!=='onTable'){ win('かんたんクリア！', '9番をポケットに入れました'); return; }
+  if(s.scratch){ respawnCue(-4.6,0); showToast('手球が落ちました。もう一度どうぞ','hint',1600); }
+  G.phase='aim'; refreshHud();
+}
+
+function resolveMini(s){
+  if(s.scratch){ G.timer = Math.max(0, G.timer-5); respawnCue(-5.2,0); showToast('手球ポケットイン −5秒','',1500); }
+  const remain = balls.filter(b=>b.num===null && b.state==='onTable').length;
+  if(remain===0){
+    G.timerOn=false;
+    const score = Math.round(G.timer*10) + Math.max(0, (12 - G.shots))*20;
+    win('タイムアタック クリア！',
+        `のこり時間 ${G.timer.toFixed(1)}秒 ／ 打数 ${G.shots}<br>スコア <b style="color:var(--accent);font-size:24px">${score}</b>`);
+    return;
+  }
+  G.phase='aim'; refreshHud();
+}
+
+function resolve9(s){
+  const nine = balls.find(b=>b.num===9);
+  const legal = (!s.scratch) && s.firstHit && (s.firstHit.num === s.lowest);
+
+  if(!legal){
+    // ファウル：9番が落ちていれば戻す、手球はボールインハンド
+    if(nine && nine.state!=='onTable'){ respotBall(nine); }
+    if(cueBall.state!=='onTable'){ /* 後で置く */ }
+    let reason = s.scratch ? '手球ポケットイン' :
+                 (!s.firstHit ? '球に当たりませんでした' :
+                  `${s.lowest}番に先に当てる必要があります`);
+    showToast('ファウル：'+reason, '', 2200);
+    G.phase='ballInHand';
+    if(cueBall.state!=='onTable'){ reviveCueForHand(); }
+    refreshHud();
+    return;
+  }
+
+  // 合法：9番が落ちていれば勝ち
+  if(nine && nine.state!=='onTable'){
+    win('ナインボール クリア！', `9番をきれいに沈めました（打数 ${G.shots}）`);
+    return;
+  }
+  G.phase='aim'; refreshHud();
+}
+
+function lowestActiveNum(){
+  let lo = Infinity;
+  for(const b of balls){ if(b.num!==null && b.num!==0 && b.state==='onTable') lo=Math.min(lo,b.num); }
+  return lo===Infinity ? null : lo;
+}
+
+function respawnCue(x,z){
+  if(cueBall.state==='onTable'){ cueBall.pos.x=x; cueBall.pos.z=z; cueBall.vel.x=cueBall.vel.z=0; return; }
+  cueBall.state='onTable'; cueBall.mesh.visible=true;
+  cueBall.pos.x=x; cueBall.pos.z=z; cueBall.vel.x=cueBall.vel.z=0; cueBall.sinkT=0;
+}
+function reviveCueForHand(){
+  cueBall.state='onTable'; cueBall.mesh.visible=true;
+  cueBall.pos.x=-4.8; cueBall.pos.z=0; cueBall.vel.x=cueBall.vel.z=0; cueBall.sinkT=0;
+}
+function respotBall(b){
+  b.state='onTable'; b.mesh.visible=true; b.vel.x=b.vel.z=0; b.sinkT=0;
+  // フット寄りの中央へ。重なるなら少しずらす
+  let x=5.5, z=0, guard=0;
+  while(guard++<50){
+    let ok=true;
+    for(const o of activeBalls()){ if(o!==b && Math.hypot(o.pos.x-x,o.pos.z-z)<2*R+0.05){ ok=false; break; } }
+    if(ok) break; x-=2*R+0.1;
+  }
+  b.pos.x=x; b.pos.z=z;
+}
+
+// =====================================================================
+// 発射
+// =====================================================================
+function fireCue(dirx, dirz, power){
+  const sp = Math.max(0, Math.min(1, power)) * MAX_SPEED;
+  cueBall.vel.x = dirx*sp; cueBall.vel.z = dirz*sp;
+  playStrike(power);
+  beginShot();
+  setPower(0);
+}
+function apiShoot(angle, power){
+  if(G.phase!=='aim' && G.phase!=='ballInHand') return false;
+  if(cueBall.state!=='onTable') reviveCueForHand();
+  fireCue(Math.cos(angle), Math.sin(angle), power);
+  return true;
+}
+
+// =====================================================================
+// 入力（ドラッグで引いて発射）
+// =====================================================================
+const raycaster = new THREE.Raycaster();
+const planeAim = new THREE.Plane(new THREE.Vector3(0,1,0), -BALL_Y);
+const tmpV = new THREE.Vector3();
+
+let dragging=false, dragStart=null, dragCur=null;
+let viewMode=false, viewDragging=false, viewLast=null;
+const ELEV_MIN=0.14, ELEV_MAX=1.45;
+const VIEW_SENS_AZIM=0.007, VIEW_SENS_ELEV=0.006;
+
+function pointerToTable(clientX, clientY){
+  const rect = renderer.domElement.getBoundingClientRect();
+  const nx = ((clientX-rect.left)/rect.width)*2-1;
+  const ny = -((clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera({x:nx,y:ny}, camera);
+  if(raycaster.ray.intersectPlane(planeAim, tmpV)) return {x:tmpV.x, z:tmpV.z};
+  return null;
+}
+
+function onDown(e){
+  resumeAudio();
+  if(viewMode){
+    viewDragging=true; viewLast={x:e.clientX,y:e.clientY};
+    return;
+  }
+  if(G.phase!=='aim' && G.phase!=='ballInHand') return;
+  const pt = pointerToTable(e.clientX, e.clientY);
+  if(!pt) return;
+
+  if(G.phase==='ballInHand'){
+    // タップで手球を置く（重ならない位置のみ）
+    let ok = Math.abs(pt.x)<WALL_X && Math.abs(pt.z)<WALL_Z;
+    for(const b of activeBalls()){ if(b!==cueBall && Math.hypot(b.pos.x-pt.x,b.pos.z-pt.z)<2*R){ ok=false; break; } }
+    for(const p of POCKETS){ if(Math.hypot(pt.x-p.x,pt.z-p.z)<CAP_R+0.2) ok=false; }
+    if(ok){
+      cueBall.pos.x=pt.x; cueBall.pos.z=pt.z;
+      G.phase='aim'; hideToast(); refreshHud();
+    }
+    return;
+  }
+  const distToCue = Math.hypot(pt.x-cueBall.pos.x, pt.z-cueBall.pos.z);
+  if(distToCue > AIM_CATCH_R) return; // 手球から離れた場所では構えられない
+
+  dragging=true; dragStart={x:pt.x,z:pt.z}; dragCur={x:pt.x,z:pt.z};
+  aimGroup.visible=true;
+}
+function onMove(e){
+  if(viewMode){
+    if(!viewDragging) return;
+    const dx = e.clientX-viewLast.x, dy = e.clientY-viewLast.y;
+    camAngle.azim -= dx*VIEW_SENS_AZIM;
+    camAngle.elev = Math.max(ELEV_MIN, Math.min(ELEV_MAX, camAngle.elev - dy*VIEW_SENS_ELEV));
+    updateCamera();
+    viewLast={x:e.clientX,y:e.clientY};
+    return;
+  }
+  if(!dragging) return;
+  const pt = pointerToTable(e.clientX, e.clientY);
+  if(!pt) return;
+  dragCur = {x:pt.x, z:pt.z};
+  updateAimVisual();
+}
+function onUp(){
+  if(viewMode){ viewDragging=false; return; }
+  if(!dragging) return;
+  dragging=false; aimGroup.visible=false; setPowerVisible(false);
+  const dx = dragCur.x-dragStart.x, dz = dragCur.z-dragStart.z;
+  const dlen = Math.hypot(dx,dz);
+  if(dlen < MIN_DRAG){ return; }              // タップ扱い＝打たない
+  // 引いた逆向きに発射
+  const dirx=-dx/dlen, dirz=-dz/dlen;
+  const power = Math.min(dlen, MAX_DRAG)/MAX_DRAG;
+  fireCue(dirx, dirz, power);
+}
+
+const cv = renderer.domElement;
+cv.addEventListener('pointerdown', e=>{ cv.setPointerCapture?.(e.pointerId); onDown(e); });
+cv.addEventListener('pointermove', onMove);
+cv.addEventListener('pointerup', onUp);
+cv.addEventListener('pointercancel', onUp);
+
+// =====================================================================
+// 照準ビジュアル（キュー・点線・ゴースト球）
+// =====================================================================
+const aimGroup = new THREE.Group(); aimGroup.visible=false; scene.add(aimGroup);
+
+const cueStick = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.11, 0.06, 6.5, 12),
+  new THREE.MeshStandardMaterial({ color:0xcaa06a, roughness:0.5 })
+);
+cueStick.rotation.z = Math.PI/2; aimGroup.add(cueStick);
+
+const dashMat = new THREE.LineDashedMaterial({ color:0xffffff, dashSize:0.35, gapSize:0.28, transparent:true, opacity:0.75 });
+const dashGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(),new THREE.Vector3()]);
+const dashLine = new THREE.Line(dashGeo, dashMat); aimGroup.add(dashLine);
+
+const ghost = new THREE.Mesh(
+  new THREE.RingGeometry(R*0.86, R, 24),
+  new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.5, side:THREE.DoubleSide })
+);
+ghost.rotation.x = -Math.PI/2; ghost.visible=false; aimGroup.add(ghost);
+
+function updateAimVisual(){
+  const dx=dragCur.x-dragStart.x, dz=dragCur.z-dragStart.z;
+  const dlen=Math.hypot(dx,dz);
+  const power = Math.min(dlen, MAX_DRAG)/MAX_DRAG;
+  setPower(power);
+  if(dlen < 0.001) return;
+  const dirx=-dx/dlen, dirz=-dz/dlen; // 発射方向
+  const cx=cueBall.pos.x, cz=cueBall.pos.z;
+
+  // キュー：発射方向の逆に、引き量ぶん後退
+  const pull = 0.5 + power*1.6;
+  cueStick.position.set(cx - dirx*(3.25+pull), BALL_Y, cz - dirz*(3.25+pull));
+  cueStick.rotation.set(0, -Math.atan2(dirz,dirx), Math.PI/2);
+
+  // 予測：最も近い球 or 壁までの直線
+  const hit = predictHit(cx, cz, dirx, dirz);
+  const ex = cx + dirx*hit.t, ez = cz + dirz*hit.t;
+  dashGeo.setFromPoints([ new THREE.Vector3(cx, BALL_Y, cz), new THREE.Vector3(ex, BALL_Y, ez) ]);
+  dashLine.computeLineDistances();
+  if(hit.ball){
+    ghost.visible=true; ghost.position.set(ex, BALL_Y, ez);
+  } else ghost.visible=false;
+
+  setPowerVisible(true);
+}
+
+function predictHit(px,pz,dx,dz){
+  let best = { t:Infinity, ball:null };
+  for(const b of activeBalls()){
+    if(b===cueBall) continue;
+    const mx=px-b.pos.x, mz=pz-b.pos.z;
+    const bdot = mx*dx + mz*dz;
+    const cc = mx*mx+mz*mz - (2*R)*(2*R);
+    const disc = bdot*bdot - cc;
+    if(disc<0) continue;
+    const t = -bdot - Math.sqrt(disc);
+    if(t>0.001 && t<best.t) best={t, ball:b};
+  }
+  // 壁
+  const walls = [];
+  if(dx>0) walls.push((WALL_X-px)/dx); if(dx<0) walls.push((-WALL_X-px)/dx);
+  if(dz>0) walls.push((WALL_Z-pz)/dz); if(dz<0) walls.push((-WALL_Z-pz)/dz);
+  for(const t of walls){ if(t>0.001 && t<best.t) best={t, ball:null}; }
+  if(best.t===Infinity) best.t=6;
+  return best;
+}
+
+// =====================================================================
+// HUD
+// =====================================================================
+const statusPill=document.getElementById('statusPill');
+const statusVal=document.getElementById('statusVal');
+const timerPill=document.getElementById('timerPill');
+const timerVal=document.getElementById('timerVal');
+const powerWrap=document.getElementById('powerWrap');
+const powerFill=document.getElementById('powerFill');
+
+function refreshHud(){
+  if(G.mode==='9ball'){
+    statusPill.style.display=''; statusPill.querySelector('.lbl').textContent='ねらう球';
+    const lo=lowestActiveNum();
+    statusVal.textContent = (G.phase==='ballInHand') ? '手球を置く' : (lo?(lo+'番'):'-');
+    timerPill.style.display='none';
+  } else if(G.mode==='minigame'){
+    statusPill.style.display=''; statusPill.querySelector('.lbl').textContent='のこり球';
+    const remain=balls.filter(b=>b.num===null && b.state==='onTable').length;
+    statusVal.textContent=remain+' / '+G.targetsTotal;
+    timerPill.style.display='';
+  } else if(G.mode==='easy'){
+    statusPill.style.display=''; statusPill.querySelector('.lbl').textContent='もくひょう';
+    statusVal.textContent='9番を入れる';
+    timerPill.style.display='none';
+  } else {
+    statusPill.style.display='none'; timerPill.style.display='none';
+  }
+}
+function setPower(p){ powerFill.style.width=(Math.max(0,Math.min(1,p))*100).toFixed(0)+'%'; }
+function setPowerVisible(v){ powerWrap.classList.toggle('show', v); }
+
+// toast
+const toastEl=document.getElementById('toast'); let toastTimer=null;
+function showToast(msg, cls='', ms=2000){
+  toastEl.innerHTML=msg; toastEl.className=''; if(cls) toastEl.classList.add(cls);
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(hideToast, ms);
+}
+function hideToast(){ toastEl.classList.remove('show'); }
+
+// result overlay
+const resultOverlay=document.getElementById('resultOverlay');
+const resultH=document.getElementById('resultH');
+const resultP=document.getElementById('resultP');
+const resultBtns=document.getElementById('resultBtns');
+function win(title, para){
+  G.phase='cleared'; G.timerOn=false;
+  resultH.textContent=title; resultH.className='msg-h good';
+  resultP.innerHTML=para;
+  buildResultButtons(true);
+  resultOverlay.classList.remove('hide');
+}
+function lose(title, para){
+  G.phase='gameover'; G.timerOn=false;
+  resultH.textContent=title; resultH.className='msg-h bad';
+  resultP.innerHTML=para;
+  buildResultButtons(false);
+  resultOverlay.classList.remove('hide');
+}
+function hideResult(){ resultOverlay.classList.add('hide'); }
+function buildResultButtons(){
+  resultBtns.innerHTML='';
+  const again=btn('もう一度','primary',()=>startMode(G.mode));
+  resultBtns.appendChild(again);
+  if(G.mode==='easy'){
+    resultBtns.appendChild(btn('ミニゲームへ','',()=>startMode('minigame')));
+    resultBtns.appendChild(btn('ナインボールへ','',()=>startMode('9ball')));
+  }
+  resultBtns.appendChild(btn('メニュー','',()=>openMenu()));
+}
+function btn(label, cls, fn){
+  const b=document.createElement('button'); b.className='btn'+(cls?(' '+cls):'');
+  b.textContent=label; b.addEventListener('click', fn); return b;
+}
+function openMenu(){
+  G.mode='select'; G.phase='aim'; hideResult(); hideToast();
+  if(viewMode){
+    viewMode=false; document.getElementById('viewModeBtn').classList.remove('active');
+    document.getElementById('app').classList.remove('viewmode');
+  }
+  document.getElementById('menuOverlay').classList.remove('hide');
+}
+
+// buttons
+document.querySelectorAll('.mode-btn').forEach(el=>{
+  el.addEventListener('click',()=>startMode(el.dataset.mode));
+});
+document.getElementById('menuBtn').addEventListener('click', openMenu);
+document.getElementById('viewModeBtn').addEventListener('click', ()=>{
+  viewMode = !viewMode;
+  document.getElementById('viewModeBtn').classList.toggle('active', viewMode);
+  document.getElementById('app').classList.toggle('viewmode', viewMode);
+  // モード切替時に進行中の構え・ドラッグはキャンセルする
+  dragging=false; viewDragging=false; aimGroup.visible=false; setPowerVisible(false);
+  if(viewMode) showToast('視点モード：ドラッグで自由に見回せます（打てません）','hint',2600);
+  else hideToast();
+});
+document.getElementById('zoomIn').addEventListener('click',()=>{ camDist=Math.max(CAM_MIN,camDist-2.5); updateCamera(); });
+document.getElementById('zoomOut').addEventListener('click',()=>{ camDist=Math.min(CAM_MAX,camDist+2.5); updateCamera(); });
+
+// 視点回転（自由に見る角度を変えられるボタン）
+const ELEV_LOW = 0.42, ELEV_HIGH = 0.92;
+document.getElementById('rotLeft').addEventListener('click',()=>{ camAngle.azim -= Math.PI/6; updateCamera(); });
+document.getElementById('rotRight').addEventListener('click',()=>{ camAngle.azim += Math.PI/6; updateCamera(); });
+document.getElementById('rotUp').addEventListener('click',()=>{
+  camAngle.elev = (camAngle.elev > (ELEV_LOW+ELEV_HIGH)/2) ? ELEV_LOW : ELEV_HIGH;
+  updateCamera();
+});
+document.getElementById('rotReset').addEventListener('click',()=>{
+  camAngle.azim = DEFAULT_AZIM; camAngle.elev = DEFAULT_ELEV; camDist = DEFAULT_DIST;
+  updateCamera();
+});
+
+// =====================================================================
+// Web Audio（外部音源なし）
+// =====================================================================
+let actx=null;
+function resumeAudio(){
+  if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} }
+  if(actx && actx.state==='suspended') actx.resume();
+}
+function tone(freq, dur, type, gain, slideTo){
+  if(!actx) return;
+  const t=actx.currentTime;
+  const o=actx.createOscillator(), g=actx.createGain();
+  o.type=type||'sine'; o.frequency.setValueAtTime(freq,t);
+  if(slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t+dur);
+  g.gain.setValueAtTime(gain, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  o.connect(g); g.connect(actx.destination);
+  o.start(t); o.stop(t+dur);
+}
+function playClick(a,b,imp){
+  const v=Math.min(0.5, 0.06+imp*0.05);
+  tone(1200+imp*40, 0.05, 'square', v);
+}
+function playCushion(b){ tone(180, 0.06, 'sine', 0.1); }
+function playPlunk(){ tone(320, 0.18, 'sine', 0.28, 90); }
+function playStrike(power){ tone(140+power*120, 0.09, 'triangle', 0.18+power*0.12, 70); }
+
+// =====================================================================
+// メインループ
+// =====================================================================
+let last=performance.now(), acc=0;
+function loop(now){
+  requestAnimationFrame(loop);
+  let dt=(now-last)/1000; last=now;
+  if(dt>DT_CLAMP) dt=DT_CLAMP;   // dtクランプ（120Hz等でも速度一定）
+  G.frames++; G.elapsed+=dt;
+
+  // タイマー（ミニゲーム）
+  if(G.timerOn && G.phase!=='cleared' && G.phase!=='gameover'){
+    G.timer-=dt;
+    if(G.timer<=0){
+      G.timer=0;
+      lose('タイムアップ', `のこり球 ${balls.filter(b=>b.num===null&&b.state==='onTable').length} 個でした`);
+    }
+    timerVal.textContent=G.timer.toFixed(1);
+    timerPill.classList.toggle('warn', G.timer<=10);
+  }
+
+  // 物理（固定ステップ・サブステップ）
+  acc+=dt;
+  let steps=0;
+  while(acc>=FIXED && steps<12){
+    if(G.phase==='shooting') physicsStep(FIXED);
+    stepSinking(FIXED);
+    acc-=FIXED; steps++;
+  }
+  if(acc>FIXED) acc=0;
+
+  // ショット終了判定
+  if(G.phase==='shooting' && allStopped()){ resolveShot(); }
+
+  syncMeshes();
+  renderer.render(scene, camera);
+}
+
+// データモデル → Mesh 同期（描画はここだけ）
+function syncMeshes(){
+  for(const b of balls){
+    if(b.state==='gone'){ b.mesh.visible=false; continue; }
+    let y=BALL_Y;
+    if(b.state==='sinking'){
+      const k=Math.min(1, b.sinkT/0.4);
+      y = BALL_Y - k*1.3;
+      if(b.sinkP){ // ポケットへ吸い込む
+        b.pos.x += (b.sinkP.x-b.pos.x)*0.25;
+        b.pos.z += (b.sinkP.z-b.pos.z)*0.25;
+      }
+    }
+    b.mesh.position.set(b.pos.x, y, b.pos.z);
+  }
+}
+requestAnimationFrame(loop);
+
+// =====================================================================
+// リサイズ・ズーム/バウンス防止
+// =====================================================================
+window.addEventListener('resize', ()=>{
+  camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+// iPad：ダブルタップズーム・ピンチ・バウンス防止
+document.addEventListener('gesturestart', e=>e.preventDefault());
+document.addEventListener('gesturechange', e=>e.preventDefault());
+document.addEventListener('gestureend', e=>e.preventDefault());
+document.addEventListener('touchmove', e=>{ e.preventDefault(); }, { passive:false });
+let lastTouchEnd=0;
+document.addEventListener('touchend', e=>{
+  const nowT=Date.now();
+  if(nowT-lastTouchEnd<=300){ e.preventDefault(); } // 300ms以内の連続タップでのズームをブロック
+  lastTouchEnd=nowT;
+}, { passive:false });
+
+</script>
+</body>
+</html>
