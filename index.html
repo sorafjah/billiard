@@ -23,6 +23,7 @@
     --ink-dark:#241a10;
     --accent:#c98a1f;
     --panel:rgba(18,16,14,.82);
+    --panel-light:rgba(250,244,228,.94);
   }
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   html,body{
@@ -52,8 +53,8 @@
     padding:14px 16px;
   }
   .pill{
-    background:var(--panel);
-    border:1px solid rgba(201,162,75,.35);
+    background:var(--panel-light);
+    border:1px solid rgba(158,124,58,.4);
     border-radius:999px;
     padding:8px 16px;
     font-weight:700; font-size:15px;
@@ -61,8 +62,10 @@
     backdrop-filter:blur(6px);
     -webkit-backdrop-filter:blur(6px);
     white-space:nowrap;
+    color:var(--ink-dark);
+    box-shadow:0 1px 3px rgba(60,45,20,.15);
   }
-  .pill .lbl{ color:#b9c4bd; font-weight:400; font-size:12px; margin-right:6px; }
+  .pill .lbl{ color:#7a6c52; font-weight:400; font-size:12px; margin-right:6px; }
   .pill .big{ font-size:18px; color:var(--accent); }
   #timerPill.warn .big{ color:#ff6b5c; }
   .grow{ flex:1; }
@@ -71,18 +74,20 @@
     pointer-events:auto;
     min-width:44px; min-height:44px;
     display:flex; align-items:center; justify-content:center;
-    background:var(--panel);
-    border:1px solid rgba(201,162,75,.35);
+    background:var(--panel-light);
+    border:1px solid rgba(158,124,58,.4);
     border-radius:12px;
-    color:var(--ink);
+    color:var(--ink-dark);
     font-size:22px; font-weight:700;
     cursor:pointer;
+    box-shadow:0 1px 3px rgba(60,45,20,.15);
   }
-  .icon-btn:active{ background:rgba(201,162,75,.22); }
+  .icon-btn:active{ background:rgba(201,162,75,.3); }
   .icon-btn.active{
     background:linear-gradient(180deg,#e8b04b,#c78a1f);
     color:#1a140a; border-color:transparent;
   }
+  .icon-btn.txt{ font-size:14px; padding:0 12px; white-space:nowrap; }
 
   #zoomWrap{
     position:absolute; right:14px; bottom:calc(14px + env(safe-area-inset-bottom));
@@ -182,13 +187,14 @@
   /* toast (foul / hint) */
   #toast{
     position:fixed; left:50%; top:76px; transform:translateX(-50%) translateY(-8px);
-    background:var(--panel); border:1px solid rgba(255,107,92,.5);
-    color:var(--ink); padding:10px 18px; border-radius:12px;
+    background:var(--panel-light); border:1px solid rgba(255,107,92,.55);
+    color:var(--ink-dark); padding:10px 18px; border-radius:12px;
     font-weight:700; font-size:15px; opacity:0; transition:opacity .2s, transform .2s;
     pointer-events:none; z-index:15; text-align:center; max-width:88vw;
+    box-shadow:0 2px 8px rgba(60,45,20,.18);
   }
   #toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
-  #toast.hint{ border-color:rgba(201,162,75,.5); }
+  #toast.hint{ border-color:rgba(158,124,58,.55); }
 
   @media print{ #hud,.overlay{ display:none !important; } }
 </style>
@@ -198,8 +204,8 @@
 
 <div id="hud">
   <div class="hud-top">
-    <button class="icon-btn" id="menuBtn" title="メニュー" aria-label="メニュー">☰</button>
-    <button class="icon-btn" id="viewModeBtn" title="視点モード" aria-label="視点モード切替">👁</button>
+    <button class="icon-btn txt" id="menuBtn" title="メニュー" aria-label="メニュー">メニュー</button>
+    <button class="icon-btn txt" id="viewModeBtn" title="視点切替" aria-label="視点切替">視点切替</button>
     <div class="pill" id="statusPill"><span class="lbl">ねらう球</span><span class="big" id="statusVal">-</span></div>
     <div class="grow"></div>
     <div class="pill" id="timerPill" style="display:none"><span class="lbl">のこり</span><span class="big" id="timerVal">--</span></div>
@@ -211,15 +217,15 @@
   </div>
 
   <div id="zoomWrap">
-    <button class="icon-btn" id="zoomIn" aria-label="ズームイン">＋</button>
-    <button class="icon-btn" id="zoomOut" aria-label="ズームアウト">－</button>
+    <button class="icon-btn txt" id="zoomIn" aria-label="ズームイン">拡大</button>
+    <button class="icon-btn txt" id="zoomOut" aria-label="ズームアウト">縮小</button>
   </div>
 
   <div id="rotWrap">
-    <button class="icon-btn" id="rotLeft" aria-label="視点を左に回す">⟲</button>
-    <button class="icon-btn" id="rotUp" aria-label="視点を上下に切替">⇕</button>
-    <button class="icon-btn" id="rotRight" aria-label="視点を右に回す">⟳</button>
-    <button class="icon-btn" id="rotReset" aria-label="視点をリセット">⌂</button>
+    <button class="icon-btn txt" id="rotLeft" aria-label="視点を左に回す">左回転</button>
+    <button class="icon-btn txt" id="rotUp" aria-label="視点を上下に切替">上下</button>
+    <button class="icon-btn txt" id="rotRight" aria-label="視点を右に回す">右回転</button>
+    <button class="icon-btn txt" id="rotReset" aria-label="視点をリセット">リセット</button>
   </div>
 </div>
 
