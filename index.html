@@ -68,6 +68,8 @@
   .pill .lbl{ color:#7a6c52; font-weight:400; font-size:12px; margin-right:6px; }
   .pill .big{ font-size:18px; color:var(--accent); }
   #timerPill.warn .big{ color:#ff6b5c; }
+  #turnPill.p1 .big{ color:#2a6fb0; }
+  #turnPill.p2 .big{ color:#c0432a; }
   .grow{ flex:1; }
 
   .icon-btn{
@@ -207,6 +209,7 @@
     <button class="icon-btn txt" id="menuBtn" title="メニュー" aria-label="メニュー">メニュー</button>
     <button class="icon-btn txt" id="viewModeBtn" title="視点切替" aria-label="視点切替">視点切替</button>
     <div class="pill" id="statusPill"><span class="lbl">ねらう球</span><span class="big" id="statusVal">-</span></div>
+    <div class="pill" id="turnPill"><span class="lbl">てばん</span><span class="big" id="turnVal">プレイヤー1</span></div>
     <div class="grow"></div>
     <div class="pill" id="timerPill" style="display:none"><span class="lbl">のこり</span><span class="big" id="timerVal">--</span></div>
   </div>
@@ -407,15 +410,26 @@ function ballTexture(baseHex, number, striped){
     x.fillStyle = baseHex; x.fillRect(0,0,256,256);
   }
   if(number !== null){
-    // 本物の球のように、対になる2箇所に同じ番号デカールを配置
-    const spots = [ [128, 62], [128, 194] ];
-    for(const [sx, sy] of spots){
+    // 本物の球のように、球の中心をはさんで真反対（対蹠点）の2箇所に同じ番号デカールを配置
+    // 対蹠点 = 経度を180度ずらし（u+0.5）、緯度を反転（1-v）した位置
+    const drawDecal=(sx,sy)=>{
       x.fillStyle = '#f6f3ea';
       x.beginPath(); x.arc(sx, sy, 42, 0, Math.PI*2); x.fill();
       x.fillStyle = '#161616';
       x.font = 'bold 52px "BIZ UDPGothic",sans-serif';
       x.textAlign='center'; x.textBaseline='middle';
       x.fillText(String(number), sx, sy+2);
+      if(number===9){
+        // 6と見分けやすいよう、実物の9番球にならって下線を入れる
+        x.fillRect(sx-15, sy+24, 30, 5);
+      }
+    };
+    const spots = [ [64, 128], [192, 128] ]; // 赤道帯（v=0.5）上の真反対2点＝歪みが出ず数字が中央に来る
+    for(const [sx, sy] of spots){
+      // u=0/1の継ぎ目をまたぐ場合に途切れないよう、両端でも描画しておく
+      drawDecal(sx, sy);
+      drawDecal(sx-256, sy);
+      drawDecal(sx+256, sy);
     }
   }
   const t = new THREE.CanvasTexture(c);
@@ -462,11 +476,21 @@ const G = {
   shots:0,
   shot:null,            // ショット中の記録
   targetsTotal:0,
+  turn:1,                // 2人交代制：現在の手番（1 or 2）
+  scores:{1:0, 2:0},     // ミニゲーム用：プレイヤーごとの沈めた球数
 };
+function turnLabel(){ return 'プレイヤー'+G.turn; }
+function nextTurn(){ G.turn = (G.turn===1) ? 2 : 1; }
+function enterBallInHand(prefix){
+  if(cueBall.state!=='onTable') reviveCueForHand();
+  G.phase='ballInHand';
+  showToast(`${prefix}${turnLabel()}は手球を好きな場所に置けます`, '', 2600);
+  refreshHud();
+}
 
 // テストフック（共通仕様）
 window.__game = {
-  get state(){ return { mode:G.mode, phase:G.phase }; },
+  get state(){ return { mode:G.mode, phase:G.phase, turn:G.turn }; },
   balls, get cueBall(){ return cueBall; },
   get frames(){ return G.frames; },
   get elapsed(){ return G.elapsed; },
@@ -486,6 +510,7 @@ function startMode(mode){
   clearBalls();
   G.mode = mode; G.phase='aim'; G.shots=0; G.shot=null;
   G.timerOn=false; G.timer=0;
+  G.turn=1; G.scores={1:0, 2:0};
   hideResult(); hideToast();
 
   if(mode==='easy')      setupEasy();
@@ -679,22 +704,38 @@ function resolveShot(){
 
 function resolveEasy(s){
   const nine = balls.find(b=>b.num===9);
-  if(nine && nine.state!=='onTable'){ win('かんたんクリア！', '9番をポケットに入れました'); return; }
-  if(s.scratch){ respawnCue(-4.6,0); showToast('手球が落ちました。もう一度どうぞ','hint',1600); }
-  G.phase='aim'; refreshHud();
+  if(nine && nine.state!=='onTable'){ win(`${turnLabel()}の勝ち！`, '9番をポケットに入れました'); return; }
+  nextTurn();
+  if(s.scratch){
+    enterBallInHand('手球がポケットに入りました。');
+  } else {
+    G.phase='aim'; hideToast(); refreshHud();
+  }
+}
+
+function miniSummary(){
+  const s1=G.scores[1], s2=G.scores[2];
+  const line = s1>s2 ? 'プレイヤー1の勝ち！' : s2>s1 ? 'プレイヤー2の勝ち！' : '引き分け！';
+  return { line, detail:`プレイヤー1: ${s1}個 ／ プレイヤー2: ${s2}個` };
 }
 
 function resolveMini(s){
-  if(s.scratch){ G.timer = Math.max(0, G.timer-5); respawnCue(-5.2,0); showToast('手球ポケットイン −5秒','',1500); }
+  if(s.pocketed.length){ G.scores[G.turn] += s.pocketed.length; }
   const remain = balls.filter(b=>b.num===null && b.state==='onTable').length;
   if(remain===0){
     G.timerOn=false;
-    const score = Math.round(G.timer*10) + Math.max(0, (12 - G.shots))*20;
-    win('タイムアタック クリア！',
-        `のこり時間 ${G.timer.toFixed(1)}秒 ／ 打数 ${G.shots}<br>スコア <b style="color:var(--accent);font-size:24px">${score}</b>`);
+    const m = miniSummary();
+    win(m.line, `${m.detail}<br>のこり時間 ${G.timer.toFixed(1)}秒`);
     return;
   }
-  G.phase='aim'; refreshHud();
+  const scratched = s.scratch;
+  if(scratched) G.timer = Math.max(0, G.timer-5);
+  nextTurn();
+  if(scratched){
+    enterBallInHand('手球がポケットに入りました（−5秒）。');
+  } else {
+    G.phase='aim'; hideToast(); refreshHud();
+  }
 }
 
 function resolve9(s){
@@ -702,24 +743,24 @@ function resolve9(s){
   const legal = (!s.scratch) && s.firstHit && (s.firstHit.num === s.lowest);
 
   if(!legal){
-    // ファウル：9番が落ちていれば戻す、手球はボールインハンド
+    // ファウル：9番が落ちていれば戻す、手番を交代して手球はボールインハンド
     if(nine && nine.state!=='onTable'){ respotBall(nine); }
-    if(cueBall.state!=='onTable'){ /* 後で置く */ }
-    let reason = s.scratch ? '手球ポケットイン' :
-                 (!s.firstHit ? '球に当たりませんでした' :
-                  `${s.lowest}番に先に当てる必要があります`);
-    showToast('ファウル：'+reason, '', 2200);
-    G.phase='ballInHand';
-    if(cueBall.state!=='onTable'){ reviveCueForHand(); }
-    refreshHud();
+    let reason = s.scratch ? '手球がポケットに入りました。' :
+                 (!s.firstHit ? '球に当たりませんでした。' :
+                  `${s.lowest}番に先に当てる必要があります。`);
+    nextTurn();
+    enterBallInHand('ファウル：'+reason);
     return;
   }
 
   // 合法：9番が落ちていれば勝ち
   if(nine && nine.state!=='onTable'){
-    win('ナインボール クリア！', `9番をきれいに沈めました（打数 ${G.shots}）`);
+    win(`${turnLabel()}の勝ち！`, `ナインボール クリア（打数 ${G.shots}）`);
     return;
   }
+
+  // 合法ヒットで何も沈められなかった場合のみ手番交代（沈めたら続けて打てる）
+  if(s.pocketed.length===0){ nextTurn(); }
   G.phase='aim'; refreshHud();
 }
 
@@ -929,6 +970,12 @@ const powerWrap=document.getElementById('powerWrap');
 const powerFill=document.getElementById('powerFill');
 
 function refreshHud(){
+  const turnPill=document.getElementById('turnPill'), turnVal=document.getElementById('turnVal');
+  turnPill.style.display = (G.mode==='select') ? 'none' : '';
+  turnVal.textContent = turnLabel();
+  turnPill.classList.toggle('p1', G.turn===1);
+  turnPill.classList.toggle('p2', G.turn===2);
+
   if(G.mode==='9ball'){
     statusPill.style.display=''; statusPill.querySelector('.lbl').textContent='ねらう球';
     const lo=lowestActiveNum();
@@ -1074,7 +1121,8 @@ function loop(now){
     G.timer-=dt;
     if(G.timer<=0){
       G.timer=0;
-      lose('タイムアップ', `のこり球 ${balls.filter(b=>b.num===null&&b.state==='onTable').length} 個でした`);
+      const m = miniSummary();
+      lose('タイムアップ', `${m.line}<br>${m.detail}`);
     }
     timerVal.textContent=G.timer.toFixed(1);
     timerPill.classList.toggle('warn', G.timer<=10);
