@@ -413,16 +413,25 @@ function ballTexture(baseHex, number, striped){
     // 本物の球のように、球の中心をはさんで真反対（対蹠点）の2箇所に同じ番号デカールを配置
     // 対蹠点 = 経度を180度ずらし（u+0.5）、緯度を反転（1-v）した位置
     const drawDecal=(sx,sy)=>{
+      // 等長方位図法(u=経度360°/v=緯度180°)では、球面上で横方向が縦方向の2倍伸びる。
+      // そのため丸は縦長の楕円、数字は横方向を半分に圧縮して描き、球に貼った時に正しく見えるようにする。
+      const rx=16, ry=32;
       x.fillStyle = '#f6f3ea';
-      x.beginPath(); x.arc(sx, sy, 42, 0, Math.PI*2); x.fill();
+      x.beginPath();
+      x.ellipse(sx, sy, rx, ry, 0, 0, Math.PI*2);
+      x.fill();
+      x.save();
+      x.translate(sx, sy);
+      x.scale(0.5, 1);
       x.fillStyle = '#161616';
-      x.font = 'bold 52px "BIZ UDPGothic",sans-serif';
+      x.font = 'bold 48px "BIZ UDPGothic",sans-serif';
       x.textAlign='center'; x.textBaseline='middle';
-      x.fillText(String(number), sx, sy+2);
+      x.fillText(String(number), 0, 1);
       if(number===9){
         // 6と見分けやすいよう、実物の9番球にならって下線を入れる
-        x.fillRect(sx-15, sy+24, 30, 5);
+        x.fillRect(-13, 22, 26, 4);
       }
+      x.restore();
     };
     const spots = [ [64, 128], [192, 128] ]; // 赤道帯（v=0.5）上の真反対2点＝歪みが出ず数字が中央に来る
     for(const [sx, sy] of spots){
@@ -446,10 +455,10 @@ const balls = [];        // 生きている球のみ扱う配列（state で管�
 let cueBall = null;
 const sphereGeo = new THREE.SphereGeometry(R, 28, 20);
 
-function makeBall({ id, num, colorHex, isCue=false, striped=false, x, z }){
-  const tex = (num===0 || isCue)
+function makeBall({ id, num, colorHex, isCue=false, striped=false, showNumber=true, x, z }){
+  const tex = isCue
       ? ballTexture(colorHex, null, false)                 // 手球は無地
-      : ballTexture(colorHex, num, striped);
+      : ballTexture(colorHex, showNumber ? num : null, striped);
   const mat = new THREE.MeshStandardMaterial({ map:tex, roughness:0.28, metalness:0.05 });
   const mesh = new THREE.Mesh(sphereGeo, mat);
   mesh.castShadow = true;
@@ -530,7 +539,7 @@ function spawnCue(x, z){
 
 function setupEasy(){
   spawnCue(-4.6, 0);
-  balls.push(makeBall({ id:'b9', num:9, colorHex:BALL_COLORS[9], striped:true, x:3.2, z:0 }));
+  balls.push(makeBall({ id:'b9', num:9, colorHex:BALL_COLORS[9], striped:true, showNumber:false, x:3.2, z:0 }));
 }
 
 function setup9ball(){
