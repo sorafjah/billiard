@@ -4,6 +4,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<!-- ホーム画面に追加して開くと、アドレスバーなしの全画面で表示される -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ビリヤード：2人用">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
@@ -199,6 +203,12 @@
   #toast.hint{ border-color:rgba(158,124,58,.55); }
 
   @media print{ #hud,.overlay{ display:none !important; } }
+
+/* ==== スマホ用パネル調整：スマホ（画面が低いとき）だけに効く。iPadには影響しない ==== */
+@media (orientation:landscape) and (max-height:500px), (orientation:portrait) and (max-height:700px){
+  .overlay{overflow-y:auto;-webkit-overflow-scrolling:touch;align-items:flex-start;padding:12px}
+  .overlay > *{margin-top:auto;margin-bottom:auto}
+}
 </style>
 </head>
 <body>
